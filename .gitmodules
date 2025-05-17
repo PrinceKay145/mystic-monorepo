@@ -1,0 +1,12 @@
+[submodule "Liquid-Staking/lib/solmate"]
+	path = Liquid-Staking/lib/solmate
+	url = https://github.com/transmissions11/solmate
+[submodule "Liquid-Staking/lib/openzeppelin-contracts"]
+	path = Liquid-Staking/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "Liquid-Staking/lib/forge-std"]
+	path = Liquid-Staking/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "Liquid-Staking/lib/ERC4626"]
+	path = Liquid-Staking/lib/ERC4626
+	url = https://github.com/corddry/ERC4626

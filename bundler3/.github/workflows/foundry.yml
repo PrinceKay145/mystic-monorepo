@@ -1,0 +1,60 @@
+name: Foundry
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# Allows to skip tests if compilation fails.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-via-ir:
+    name: Compilation (via IR)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/install
+
+      - name: Build contracts via IR & check sizes
+        # skip import files, because we don't care if contracts are too big
+        run: forge build --sizes --skip Import
+
+      - name: Save forge compilation cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            cache
+            out
+          key: forge-${{ github.ref_name }}-${{ github.run_id }}
+
+  test:
+    needs: build-via-ir
+
+    name: Tests on chainid = ${{ matrix.chain }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        chain: [1, 8453]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/install
+
+      - name: Run tests on chain ${{ matrix.chain }}
+        run: forge test --chain ${{ matrix.chain }}
+        env:
+          ALCHEMY_KEY: ${{ secrets.PROTOCOL_ALCHEMY_KEY }}

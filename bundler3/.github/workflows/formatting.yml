@@ -1,0 +1,27 @@
+name: Formatting
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/install
+
+      - name: Run Linter
+        run: find ./ -type f -name '*.sol' -exec perl -pi -e 's/transient //g' {} + && forge fmt --check
+      - name: Run Certora Config Linter
+        run: for file in certora/confs/*.conf; do diff <(grep -v "//" "$file" | jq) <(grep -v "//" "$file"); done
