@@ -121,7 +121,7 @@ contract stPlumeMinter is frxETHMinter, AccessControl {
             cooldownTimestamp = plumeStaking.cooldownEndDate();
         }
         require(amountUnstaked > 0, "No funds were unstaked");
-        require(amountUnstaked >= amount, "Not enough funds unstaked");
+        require(amountUnstaked >= amount, "Not enough funds unstaked"); 
         withdrawalRequests[msg.sender] = WithdrawalRequest({
             amount: amountUnstaked,
             timestamp: cooldownTimestamp
@@ -154,7 +154,7 @@ contract stPlumeMinter is frxETHMinter, AccessControl {
     /// @notice Withdraw withheld ETH
     function withdrawFee() external nonReentrant onlyByOwnGov returns (uint256 amount) {
         _rebalance();
-        address(owner).call{value: withHoldEth}("");
+        address(owner).call{value: withHoldEth}(""); // @audit: success not checked
         amount = withHoldEth;
         withHoldEth = 0;
         return amount;

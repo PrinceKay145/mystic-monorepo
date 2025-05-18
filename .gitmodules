@@ -10,3 +10,15 @@
 [submodule "Liquid-Staking/lib/ERC4626"]
 	path = Liquid-Staking/lib/ERC4626
 	url = https://github.com/corddry/ERC4626
+[submodule "bundler3/lib/morpho-blue"]
+	path = bundler3/lib/morpho-blue
+	url = https://github.com/morpho-org/morpho-blue
+[submodule "bundler3/lib/openzeppelin-contracts"]
+	path = bundler3/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "bundler3/lib/forge-std"]
+	path = bundler3/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "bundler3/lib/permit2"]
+	path = bundler3/lib/permit2
+	url = https://github.com/Uniswap/permit2

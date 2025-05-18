@@ -31,6 +31,21 @@ interface IPlumeStaking {
     function PLUME() external pure returns (address);
 
     // Core functions all implementations must support
+    /**
+     * @notice Add a new validator
+     * @param validatorId ID of the validator
+     * @param capacity Initial capacity in ETH
+     * @param active Whether the validator is active
+     */
+    function addValidator(uint16 validatorId, uint256 capacity, bool active) external;
+
+    /**
+     * @notice Set the maximum capacity for a validator
+     * @param validatorId ID of the validator
+     * @param capacity Maximum capacity in ETH
+     */
+    function setValidatorCapacity(uint16 validatorId, uint256 capacity) external;
+
     function initialize(
         address owner
     ) external;

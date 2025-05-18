@@ -7,10 +7,8 @@ import "../../src/stPlumeMinter.sol";
 import "../../src/frxETH.sol";
 import "../../src/sfrxETH.sol";
 import "../../src/OperatorRegistry.sol";
-// import "../../src/DepositContract.sol";
-import { IPlumeStaking } from "../../src/interfaces/IPlumeStaking.sol";
-import { PlumeStakingStorage } from "../../src/interfaces/PlumeStakingStorage.sol";
-
+import "../../src/interfaces/IPlumeStaking.sol";
+import "../../src/interfaces/PlumeStakingStorage.sol";
 
 contract StPlumeMinterForkTest is Test {
     stPlumeMinter minter;
@@ -18,7 +16,7 @@ contract StPlumeMinterForkTest is Test {
     sfrxETH sfrxETHToken;
     OperatorRegistry registry;
     IPlumeStaking mockPlumeStaking;
-    
+    address depositContract;
     address owner = address(0x1234);
     address timelock = address(0x5678);
     address user1 = address(0x9ABC);
@@ -36,14 +34,18 @@ contract StPlumeMinterForkTest is Test {
     
     function setUp() public {        
         // Deploy mock PlumeStaking
-        mockPlumeStaking =  IPlumeStaking(0xA20bfe49969D4a0E9abfdb6a46FeD777304ba07f);
+        mockPlumeStaking = IPlumeStaking(0xA20bfe49969D4a0E9abfdb6a46FeD777304ba07f);
+        
+        // Create mock deposit contract address
+        depositContract = address(0); // Use address(0) as a mock
         
         // Set up validators in mock
-        // vm.startPrank(address(this));
-        // // mockPlumeStaking.addValidator(1, 32 ether, true);
-        // // mockPlumeStaking.addValidator(2, 64 ether, true);
-        // // mockPlumeStaking.addValidator(3, 32 ether, false); // Inactive validator
-        // vm.stopPrank();
+        vm.startPrank(address(0xC0A7a3AD0e5A53cEF42AB622381D0b27969c4ab5));
+        mockPlumeStaking.setValidatorCapacity(1, 10 ether);
+        mockPlumeStaking.addValidator(1, 32 ether, true);
+        mockPlumeStaking.addValidator(2, 64 ether, true);
+        mockPlumeStaking.addValidator(3, 32 ether, false); // Inactive validator
+        vm.stopPrank();
         
         // Fund the mock with ETH for withdrawals
         vm.deal(address(mockPlumeStaking), 100 ether);
@@ -61,21 +63,18 @@ contract StPlumeMinterForkTest is Test {
             address(sfrxETHToken),
             owner,
             timelock,
-            address(mockPlumeStaking)
-        );
+            address(mockPlumeStaking));
+            // depositContract );
 
         OperatorRegistry.Validator[] memory validators = new OperatorRegistry.Validator[](3);
         validators[0] = OperatorRegistry.Validator(1);
-        // validators[1] = OperatorRegistry.Validator(2);
-        // validators[2] = OperatorRegistry.Validator(3);
+        validators[1] = OperatorRegistry.Validator(2);
+        validators[2] = OperatorRegistry.Validator(3);
         
         vm.prank(owner);
         minter.addValidators(validators);
-        vm.prank(owner);
         frxETHToken.addMinter(address(minter));
-        vm.prank(owner);
         frxETHToken.addMinter(address(owner));
-    
     }
     
     // Tests for basic roles and configuration
