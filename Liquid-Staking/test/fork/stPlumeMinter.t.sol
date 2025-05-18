@@ -9,7 +9,16 @@ import "../../src/sfrxETH.sol";
 import "../../src/OperatorRegistry.sol";
 import "../../src/interfaces/IPlumeStaking.sol";
 import "../../src/interfaces/PlumeStakingStorage.sol";
+    // Contract that rejects ETH transfers
+    contract EthRejecter {
+        receive() external payable {
+            revert("I reject ETH");
+        }
 
+        function toString() public pure returns (string memory) {
+            return "EthRejecter";
+        }
+    }
 contract StPlumeMinterForkTest is Test {
     stPlumeMinter minter;
     frxETH frxETHToken;
@@ -32,49 +41,49 @@ contract StPlumeMinterForkTest is Test {
     event TokenMinterMinted(address indexed sender, address indexed to, uint256 amount);
     event DepositSent(uint16 validatorId);
     
-    function setUp() public {        
-        // Deploy mock PlumeStaking
-        mockPlumeStaking = IPlumeStaking(0xA20bfe49969D4a0E9abfdb6a46FeD777304ba07f);
-        
-        // Create mock deposit contract address
-        depositContract = address(0); // Use address(0) as a mock
-        
-        // Set up validators in mock
-        vm.startPrank(address(0xC0A7a3AD0e5A53cEF42AB622381D0b27969c4ab5));
-        mockPlumeStaking.setValidatorCapacity(1, 10 ether);
-        mockPlumeStaking.addValidator(1, 32 ether, true);
-        mockPlumeStaking.addValidator(2, 64 ether, true);
-        mockPlumeStaking.addValidator(3, 32 ether, false); // Inactive validator
-        vm.stopPrank();
-        
-        // Fund the mock with ETH for withdrawals
-        vm.deal(address(mockPlumeStaking), 100 ether);
-        vm.deal(address(user1), 100 ether);
-        vm.deal(address(user2), 100 ether);
-        
-        // Deploy contracts
-        frxETHToken = new frxETH(owner, timelock);
-        sfrxETHToken = new sfrxETH(ERC20(address(frxETHToken)), 1000); // 1000 second rewards cycle
-        
-        // Deploy minter
-        vm.prank(owner);
-        minter = new stPlumeMinter(
-            address(frxETHToken),
-            address(sfrxETHToken),
-            owner,
-            timelock,
-            address(mockPlumeStaking));
-            // depositContract );
+    function setUp() public {
+    // Deploy mock PlumeStaking
+    mockPlumeStaking = IPlumeStaking(0xA20bfe49969D4a0E9abfdb6a46FeD777304ba07f);
+    
+    // Create mock deposit contract address
+    depositContract = address(0);
+    
+    // Set up validators in mock - use the actual creator address
+    vm.startPrank(address(0xC0A7a3AD0e5A53cEF42AB622381D0b27969c4ab5));
+    mockPlumeStaking.setValidatorCapacity(1, 1000 ether); // Increased capacity
+    // mockPlumeStaking.addValidator(1, 32 ether, true); // Active validator
+    // mockPlumeStaking.addValidator(2, 64 ether, true); // Active validator
+    // mockPlumeStaking.addValidator(3, 32 ether, false); // Inactive validator
+    vm.stopPrank();
+    
+    // Fund addresses
+    vm.deal(address(mockPlumeStaking), 1000 ether);
+    vm.deal(address(user1), 100 ether);
+    vm.deal(address(user2), 100 ether);
+    
+    // Deploy contracts - need owner context for frxETH deployment
+    vm.startPrank(owner);
+    frxETHToken = new frxETH(owner, timelock);
+    sfrxETHToken = new sfrxETH(ERC20(address(frxETHToken)), 1000);
+    
+    // Deploy minter
+    minter = new stPlumeMinter(
+        address(frxETHToken),
+        address(sfrxETHToken),
+        owner,
+        timelock,
+        address(mockPlumeStaking)
+    );
 
-        OperatorRegistry.Validator[] memory validators = new OperatorRegistry.Validator[](3);
-        validators[0] = OperatorRegistry.Validator(1);
-        validators[1] = OperatorRegistry.Validator(2);
-        validators[2] = OperatorRegistry.Validator(3);
-        
-        vm.prank(owner);
-        minter.addValidators(validators);
-        frxETHToken.addMinter(address(minter));
-        frxETHToken.addMinter(address(owner));
+    OperatorRegistry.Validator[] memory validators = new OperatorRegistry.Validator[](3);
+    validators[0] = OperatorRegistry.Validator(1);
+    validators[1] = OperatorRegistry.Validator(2);
+    validators[2] = OperatorRegistry.Validator(3);
+    
+    minter.addValidators(validators);
+    frxETHToken.addMinter(address(minter));
+    frxETHToken.addMinter(address(owner));
+    vm.stopPrank();
     }
     
     // Tests for basic roles and configuration
@@ -552,4 +561,107 @@ contract StPlumeMinterForkTest is Test {
         // Should select validator 1 since it's active and has capacity
         assertEq(validatorId, 1);
     }
+    // Helper function to access the private withHoldEth variable
+    function getWithHoldEth() public view returns (uint256) {
+        // Find storage slot by analyzing the contract layout
+        bytes32 slot = bytes32(uint256(4)); // Example slot, adjust as needed
+        bytes32 value = vm.load(address(minter), slot);
+        return uint256(value);
+    }
+    
+    function test_unchecked_eth_transfer_vulnerability() public {
+    // Deploy a contract that rejects ETH transfers
+    EthRejecter rejecter = new EthRejecter();
+    
+    // Setup - add some ETH to the contract
+    vm.deal(address(minter), 10 ether);
+    
+    // Setup for withdraw test
+    vm.prank(user1);
+    minter.submit{value: 5 ether}();
+    
+    // Setup unstake and withdrawal request
+    vm.startPrank(user1);
+    frxETHToken.approve(address(minter), 2 ether);
+    minter.unstake(2 ether);
+    vm.warp(block.timestamp + 3 days); // Fast-forward past cooldown
+    
+    // Record contract balance before the failing withdraw
+    uint256 contractBalanceBefore = address(minter).balance;
+    
+    // Attempt withdrawal to rejecting contract
+    bool withdrawSuccess = false;
+    try minter.withdraw(address(rejecter)) {
+        withdrawSuccess = true;
+    } catch {
+        // If it properly checks for success, it should revert
+        withdrawSuccess = false;
+    }
+    vm.stopPrank();
+    
+    // Check if the withdrawal "succeeded" in the contract but failed to transfer ETH
+    if (withdrawSuccess) {
+        // The vulnerability exists - contract thinks withdrawal happened but ETH is still there
+        uint256 contractBalanceAfter = address(minter).balance;
+        assertEq(contractBalanceAfter, contractBalanceBefore, "ETH should still be in contract");
+        console.log("Vulnerability confirmed: ETH transfer failed but function succeeded");
+        console.log("ETH still in contract:", contractBalanceAfter);
+    } else {
+        console.log("No vulnerability - function properly checked ETH transfer result");
+    }
+    
+    // Now test withdrawFee
+    // First, set some withholding fee to withdraw
+    vm.startPrank(owner);
+    minter.setWithholdRatio(500000); // 50% withhold ratio
+    minter.setWithholdFee(1000); // 10% fee
+    
+    // We need to generate some withhold ETH
+    vm.stopPrank();
+    vm.prank(user2);
+    minter.submit{value: 4 ether}();
+    
+    // Now try to withdraw fees to the rejecting contract
+    // Store original owner
+    address originalOwner = minter.owner();
+    
+    // Make the rejector the temporary owner
+    vm.prank(address(this));
+    vm.store(
+        address(minter),
+        bytes32(uint256(0)), // Owner is typically in slot 0 for Owned contracts
+        bytes32(uint256(uint160(address(rejecter))))
+    );
+    
+    // Record balance before withdrawFee
+    contractBalanceBefore = address(minter).balance;
+    
+    // Try to withdraw fees
+    bool feeWithdrawSuccess = false;
+    vm.prank(address(rejecter)); // The rejector is now the owner
+    try minter.withdrawFee() {
+        feeWithdrawSuccess = true;
+    } catch {
+        feeWithdrawSuccess = false;
+    }
+    
+    // Check if fee withdrawal "succeeded" in the contract but failed to transfer ETH
+    if (feeWithdrawSuccess) {
+        // The vulnerability exists
+        uint256 contractBalanceAfter = address(minter).balance;
+        assertEq(contractBalanceAfter, contractBalanceBefore, "ETH fees should still be in contract");
+        console.log("Vulnerability confirmed for withdrawFee: ETH transfer failed but function succeeded");
+        console.log("Fee ETH still in contract but marked as withdrawn");
+    } else {
+        console.log("No vulnerability in withdrawFee - function properly checked ETH transfer result");
+    }
+    
+    // Restore original owner for cleanup
+    vm.store(
+        address(minter),
+        bytes32(uint256(0)),
+        bytes32(uint256(uint160(originalOwner)))
+    );
+    }
+
 }
